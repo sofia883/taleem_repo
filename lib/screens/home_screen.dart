@@ -1,6 +1,4 @@
-import 'package:flutter/cupertino.dart';
 import 'package:taleem_app/common_imports.dart';
-
 class HomeScreen extends StatefulWidget {
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -110,14 +108,44 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text("Talim Time Selector"),
       ),
-      body: Padding(
-        padding: EdgeInsets.all(16),
-        child: GridView.count(
-          crossAxisCount: 3,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          children: sessions.map((session) => _buildGridItem(session)).toList(),
-        ),
+      body: Column(
+        children: [
+          // Grid for session items.
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: GridView.count(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                children: sessions.map((session) => _buildGridItem(session)).toList(),
+              ),
+            ),
+          ),
+          // Start session container at the bottom.
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: SessionCircleContainer(
+              onTap: () {
+                // Navigate to your SessionScreen, passing the sessions list.
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SessionScreen(sessions: sessions),
+                  ),
+                );
+              },
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.play_circle_outline, size: 50, color: Colors.green),
+                  SizedBox(height: 8),
+                  Text("Start", style: TextStyle(fontSize: 20, color: Colors.white)),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
