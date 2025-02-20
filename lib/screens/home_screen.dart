@@ -45,21 +45,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<TimeOfDay?> showTimePicker({
-    required BuildContext context,
-    required TimeOfDay initialTime,
-    required Color accentColor,
-  }) async {
-    return showModalBottomSheet(
-      context: context,
-      builder: (context) => TimePicker(
-        onTimeSelected: (TimeOfDay time) {
-          print('Selected time: ${time.format(context)}');
-        },
-      ),
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-    );
+  // Helper to format total minutes into "X hr Y min" (or just "Y min").
+  String formatDuration(int totalMinutes) {
+    int hours = totalMinutes ~/ 60;
+    int minutes = totalMinutes % 60;
+    if (hours > 0) {
+      return "$hours hr ${minutes} min";
+    } else {
+      return "$minutes min";
+    }
   }
 
   Widget _buildGridItem(Session session, int index) {
@@ -67,11 +61,10 @@ class _HomeScreenState extends State<HomeScreen> {
         (index == _currentSessionIndex) &&
         (_sessionStatus == SessionStatus.running ||
             _sessionStatus == SessionStatus.paused);
-    return GestureDetector(
-      onTap: () => showTimePicker(
-          context: context,
-          initialTime: TimeOfDay.now(),
-          accentColor: Colors.blue),
+    // Calculate current duration in minutes.
+    int currentMinutes = session.selectedDuration ?? session.defaultDuration;
+
+    return Container(
       child: Card(
         elevation: 4,
         child: Container(
@@ -87,21 +80,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 8),
-              DropdownButton<int>(
-                value: session.selectedDuration ?? session.defaultDuration,
-                items: [5, 10, 15, 20, 25, 30].map((int value) {
-                  return DropdownMenuItem<int>(
-                    value: value,
-                    child: Text('$value min'),
-                  );
-                }).toList(),
-                onChanged: (int? newValue) {
-                  setState(() {
-                    session.selectedDuration = newValue;
-                  });
-                  storeService.saveSessionDuration(
-                      session.name, session.selectedDuration!);
-                },
+              // Display the formatted duration.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    formatDuration(currentMinutes),
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.arrow_drop_down, size: 16),
+                ],
               )
             ],
           ),
@@ -282,7 +271,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       children: [
         _buildSessionGrid(),
-        SizedBox(height: 20),
+        Divider(),
+        SizedBox(height: 200),
         SessionCircleContainer(
           onTap: () {
             if (!_isSessionActive) {
@@ -296,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.play_circle_outline, size: 50, color: Colors.green),
+              Icon(Icons.play_arrow, size: 50, color: Colors.white),
               SizedBox(height: 8),
               Text("Start Session",
                   style: TextStyle(fontSize: 20, color: Colors.white)),
@@ -312,7 +302,17 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       children: [
         _buildSessionGrid(),
-        SizedBox(height: 20),
+        Divider(
+          thickness: 3,
+        ),
+        SizedBox(height: 200),
+        if (_sessionStatus == SessionStatus.running ||
+            _sessionStatus == SessionStatus.paused)
+          SessionControlButtons(
+            onStop: _stopSession,
+            onPauseResume: _pauseSession,
+            isRunning: _sessionStatus == SessionStatus.running,
+          ),
         SessionCircleContainer(
           onTap: () {
             if (_sessionStatus == SessionStatus.notStarted) {
@@ -322,13 +322,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: _buildTimerContent(),
         ),
         SizedBox(height: 20),
-        if (_sessionStatus == SessionStatus.running ||
-            _sessionStatus == SessionStatus.paused)
-          SessionControlButtons(
-            onStop: _stopSession,
-            onPauseResume: _pauseSession,
-            isRunning: _sessionStatus == SessionStatus.running,
-          ),
       ],
     );
   }

@@ -1,4 +1,5 @@
 import 'package:taleem_app/common_imports.dart';
+
 class SessionControlButtons extends StatelessWidget {
   final VoidCallback onStop;
   final VoidCallback onPauseResume;
@@ -13,25 +14,28 @@ class SessionControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        ElevatedButton.icon(
-          onPressed: onStop,
-          icon: Icon(Icons.stop, color: Colors.white),
-          label: Text("Stop"),
-          style: ElevatedButton.styleFrom(iconColor: Colors.red),
-        ),
-        ElevatedButton.icon(
-          onPressed: onPauseResume,
-          icon: Icon(
-            isRunning ? Icons.pause : Icons.play_arrow,
-            color: Colors.white,
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          ElevatedButton.icon(
+            onPressed: onStop,
+            icon: Icon(Icons.stop, color: Colors.blue),
+            label: Text("Stop"),
+            style: ElevatedButton.styleFrom(iconColor: Colors.red),
           ),
-          label: Text(isRunning ? "Pause" : "Resume"),
-          style: ElevatedButton.styleFrom(iconColor: Colors.blue),
-        ),
-      ],
+          ElevatedButton.icon(
+            onPressed: onPauseResume,
+            icon: Icon(
+              isRunning ? Icons.pause : Icons.play_arrow,
+              color: Colors.blue,
+            ),
+            label: Text(isRunning ? "Pause" : "Resume"),
+            style: ElevatedButton.styleFrom(iconColor: Colors.blue),
+          ),
+        ],
+      ),
     );
   }
 }
