@@ -1,187 +1,123 @@
+import 'package:flutter/cupertino.dart';
 import 'package:taleem_app/common_imports.dart';
-class TalimHomePage extends StatefulWidget {
+
+class HomeScreen extends StatefulWidget {
   @override
-  _TalimHomePageState createState() => _TalimHomePageState();
+  _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _TalimHomePageState extends State<TalimHomePage> {
-  // Default durations in minutes
-  int halkaTime = 10;
-  int talimTime = 20;
-  int sifatTime = 5;
-  int mashwaraTime = 5;
-  int tashqeerTime = 10;
+class _HomeScreenState extends State<HomeScreen> {
+  final StoreService storeService = StoreService();
 
-  late List<Session> sessions;
-  int currentSessionIndex = 0;
-  int remainingSeconds = 0;
-  Timer? timer;
-  final AudioPlayer audioPlayer = AudioPlayer();
+  List<Session> sessions = [
+    Session(name: 'Halqa', defaultDuration: 10),
+    Session(name: 'Taleem', defaultDuration: 20),
+    Session(name: '6 Sifat', defaultDuration: 5),
+    Session(name: 'Mashwarah', defaultDuration: 5),
+    Session(name: 'Tashkeel', defaultDuration: 10),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _initializeSessions();
+    _loadSelectedDurations();
   }
 
-  void _initializeSessions() {
-    sessions = [
-      Session(name: 'Halka', duration: halkaTime),
-      Session(name: 'Talim', duration: talimTime),
-      Session(name: '6 Sifat', duration: sifatTime),
-      Session(name: 'Mashwara', duration: mashwaraTime),
-      Session(name: 'Tashqeer', duration: tashqeerTime),
-    ];
-    // Set initial remaining time based on the first session
-    remainingSeconds = sessions[currentSessionIndex].duration * 60;
-  }
-
-  void _startTimer() {
-    // Cancel any existing timer before starting a new one
-    timer?.cancel();
-    timer = Timer.periodic(Duration(seconds: 1), (t) {
-      if (remainingSeconds > 0) {
+  Future<void> _loadSelectedDurations() async {
+    for (var session in sessions) {
+      int? storedDuration = await storeService.loadSessionDuration(session.name);
+      if (storedDuration != null) {
         setState(() {
-          remainingSeconds--;
+          session.selectedDuration = storedDuration;
         });
-      } else {
-        // When time is up, play a beep sound
-        _playBeep();
-        t.cancel();
-        _moveToNextSession();
       }
-    });
-  }
-
-  void _stopTimer() {
-    timer?.cancel();
-  }
-
-  void _resetTimer() {
-    _stopTimer();
-    setState(() {
-      currentSessionIndex = 0;
-      remainingSeconds = sessions[currentSessionIndex].duration * 60;
-    });
-  }
-
-  void _moveToNextSession() {
-    if (currentSessionIndex < sessions.length - 1) {
-      setState(() {
-        currentSessionIndex++;
-        remainingSeconds = sessions[currentSessionIndex].duration * 60;
-      });
-      // Automatically start the next session
-      _startTimer();
-    } else {
-      // All sessions complete
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Completed'),
-          content: Text('All sessions are complete!'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _resetTimer();
-              },
-              child: Text('OK'),
-            )
-          ],
-        ),
-      );
     }
   }
 
-  Future<void> _playBeep() async {
-    // Ensure you have placed your beep.mp3 in assets/ and declared it in pubspec.yaml
-    await audioPlayer.play(AssetSource('assets/beep.mp3'));
+  void _showTimePicker(Session session) {
+    Duration initialDuration =
+        Duration(minutes: session.selectedDuration ?? session.defaultDuration);
+    Duration tempDuration = initialDuration;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          height: 300,
+          child: Column(
+            children: [
+              Expanded(
+                child: CupertinoTimerPicker(
+                  mode: CupertinoTimerPickerMode.hm,
+                  initialTimerDuration: initialDuration,
+                  onTimerDurationChanged: (Duration newDuration) {
+                    tempDuration = newDuration;
+                  },
+                ),
+              ),
+              ElevatedButton(
+                child: Text("Select Time"),
+                onPressed: () {
+                  setState(() {
+                    session.selectedDuration = tempDuration.inMinutes;
+                  });
+                  storeService.saveSessionDuration(session.name, session.selectedDuration!);
+                  Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGridItem(Session session) {
+    return GestureDetector(
+      onTap: () => _showTimePicker(session),
+      child: Card(
+        elevation: 4,
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Container(
+            padding: EdgeInsets.all(8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  session.name,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  session.selectedDuration != null
+                      ? '${session.selectedDuration} min'
+                      : 'Not Selected',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Format minutes and seconds for display
-    String minutesStr = (remainingSeconds ~/ 60).toString().padLeft(2, '0');
-    String secondsStr = (remainingSeconds % 60).toString().padLeft(2, '0');
-
     return Scaffold(
       appBar: AppBar(
-        title: Text('Talim Timer'),
-        actions: [
-          // Navigate to a settings page to set durations for each session
-          IconButton(
-            icon: Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => SettingsPage(
-                    halkaTime: halkaTime,
-                    talimTime: talimTime,
-                    sifatTime: sifatTime,
-                    mashwaraTime: mashwaraTime,
-                    tashqeerTime: tashqeerTime,
-                    onSave: (newHalka, newTalim, newSifat, newMashwara, newTashqeer) {
-                      setState(() {
-                        halkaTime = newHalka;
-                        talimTime = newTalim;
-                        sifatTime = newSifat;
-                        mashwaraTime = newMashwara;
-                        tashqeerTime = newTashqeer;
-                        _initializeSessions();
-                      });
-                    },
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
+        title: Text("Talim Time Selector"),
       ),
-      body: Center(
-        child: GestureDetector(
-          onTap: () {
-            // Tapping the circular container will start (or pause) the timer
-            if (timer == null || !timer!.isActive) {
-              _startTimer();
-            } else {
-              _stopTimer();
-            }
-          },
-          child: Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.blueAccent,
-            ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    sessions[currentSessionIndex].name,
-                    style: TextStyle(color: Colors.white, fontSize: 24),
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    '$minutesStr:$secondsStr',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
-          ),
+      body: Padding(
+        padding: EdgeInsets.all(16),
+        child: GridView.count(
+          crossAxisCount: 3,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          children: sessions.map((session) => _buildGridItem(session)).toList(),
         ),
-      ),
-      // A floating action button to reset the timer
-      floatingActionButton: FloatingActionButton(
-        child: Icon(Icons.stop),
-        onPressed: _resetTimer,
       ),
     );
   }
