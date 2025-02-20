@@ -64,36 +64,36 @@ class _HomeScreenState extends State<HomeScreen> {
     // Calculate current duration in minutes.
     int currentMinutes = session.selectedDuration ?? session.defaultDuration;
 
-    return Container(
-      child: Card(
-        elevation: 4,
-        child: Container(
-          padding: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: isActive ? Colors.green[300] : Colors.white,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                session.name,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 8),
-              // Display the formatted duration.
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    formatDuration(currentMinutes),
-                    style: TextStyle(fontSize: 14),
-                  ),
-                  SizedBox(width: 4),
-                  Icon(Icons.arrow_drop_down, size: 16),
-                ],
-              )
-            ],
-          ),
+    return Card(
+      elevation: 4,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey, width: 1),
+          borderRadius: BorderRadius.circular(12),
+          color: isActive ? Colors.green[300] : Colors.white,
+        ),
+        padding: EdgeInsets.all(8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              session.name,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            // Display the formatted duration.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  formatDuration(currentMinutes),
+                  style: TextStyle(fontSize: 14),
+                ),
+                SizedBox(width: 4),
+                Icon(Icons.arrow_drop_down, size: 16),
+              ],
+            )
+          ],
         ),
       ),
     );
