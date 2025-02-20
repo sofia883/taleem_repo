@@ -2,36 +2,6 @@ import 'package:taleem_app/common_imports.dart';
 
 // Define session statuses.
 enum SessionStatus { notStarted, countdown, running, paused, ended }
-class SessionCircleContainer extends StatelessWidget {
-  final Widget child;
-  final VoidCallback? onTap;
-  final double size;
-  final Color color;
-
-  const SessionCircleContainer({
-    Key? key,
-    required this.child,
-    this.onTap,
-    this.size = 200,
-    this.color = Colors.blueAccent,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color,
-        ),
-        child: Center(child: child),
-      ),
-    );
-  }
-}
 
 class SessionScreen extends StatefulWidget {
   final List<Session> sessions;
@@ -74,7 +44,6 @@ class _SessionScreenState extends State<SessionScreen> {
   }
 
   void _startSession() {
-    // Retrieve duration in minutes (selected or default).
     int duration = widget.sessions[_currentSessionIndex].selectedDuration ??
         widget.sessions[_currentSessionIndex].defaultDuration;
     _remainingSeconds = duration * 60;
@@ -160,18 +129,18 @@ class _SessionScreenState extends State<SessionScreen> {
       setState(() {
         _sessionStatus = SessionStatus.ended;
       });
-      // Optionally perform additional cleanup or navigation.
+      // Additional cleanup if needed.
     }
   }
 
-  // Helper to format time as MM:SS.
+  // Format seconds as MM:SS.
   String _formatTime(int seconds) {
     int minutes = seconds ~/ 60;
     int secs = seconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
 
-  // Build the content to be displayed in the circular container.
+  // Build the content displayed inside the circular container.
   Widget _buildCenterContent() {
     switch (_sessionStatus) {
       case SessionStatus.notStarted:
@@ -197,7 +166,9 @@ class _SessionScreenState extends State<SessionScreen> {
             Text(
               widget.sessions[_currentSessionIndex].name,
               style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white),
             ),
             SizedBox(height: 8),
             Text(
@@ -217,6 +188,40 @@ class _SessionScreenState extends State<SessionScreen> {
     }
   }
 
+  // Build a horizontal list to show sessions with the active one highlighted.
+  Widget _buildSessionGrid() {
+    return Container(
+      height: 80,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: widget.sessions.length,
+        itemBuilder: (context, index) {
+          final session = widget.sessions[index];
+          bool isActive = index == _currentSessionIndex &&
+              (_sessionStatus == SessionStatus.running ||
+                  _sessionStatus == SessionStatus.paused);
+          return Container(
+            width: 100,
+            margin: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            decoration: BoxDecoration(
+              color: isActive ? Colors.green : Colors.grey[300],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Text(
+                session.name,
+                style: TextStyle(
+                  color: isActive ? Colors.white : Colors.black,
+                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -224,10 +229,12 @@ class _SessionScreenState extends State<SessionScreen> {
         title: Text("Session Controller"),
       ),
       body: Center(
-        child: Stack(
-          alignment: Alignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Use our custom circular container widget.
+            _buildSessionGrid(),
+            SizedBox(height: 20),
+            // Circular container showing the session timer.
             SessionCircleContainer(
               onTap: () {
                 if (_sessionStatus == SessionStatus.notStarted) {
@@ -236,31 +243,33 @@ class _SessionScreenState extends State<SessionScreen> {
               },
               child: _buildCenterContent(),
             ),
-            // Stop button on the left.
+            SizedBox(height: 30),
+            // Row for Stop and Pause/Resume buttons.
             if (_sessionStatus == SessionStatus.running ||
                 _sessionStatus == SessionStatus.paused)
-              Positioned(
-                left: 20,
-                child: IconButton(
-                  icon: Icon(Icons.stop, size: 40, color: Colors.red),
-                  onPressed: _stopSession,
-                ),
-              ),
-            // Pause/Resume button on the right.
-            if (_sessionStatus == SessionStatus.running ||
-                _sessionStatus == SessionStatus.paused)
-              Positioned(
-                right: 20,
-                child: IconButton(
-                  icon: Icon(
-                    _sessionStatus == SessionStatus.running
-                        ? Icons.pause
-                        : Icons.play_arrow,
-                    size: 40,
-                    color: Colors.white,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _stopSession,
+                    icon: Icon(Icons.stop, color: Colors.white),
+                    label: Text("Stop"),
+                    style: ElevatedButton.styleFrom(iconColor: Colors.red),
                   ),
-                  onPressed: _pauseSession,
-                ),
+                  ElevatedButton.icon(
+                    onPressed: _pauseSession,
+                    icon: Icon(
+                      _sessionStatus == SessionStatus.running
+                          ? Icons.pause
+                          : Icons.play_arrow,
+                      color: Colors.white,
+                    ),
+                    label: Text(_sessionStatus == SessionStatus.running
+                        ? "Pause"
+                        : "Resume"),
+                    style: ElevatedButton.styleFrom(iconColor: Colors.blue),
+                  ),
+                ],
               ),
           ],
         ),

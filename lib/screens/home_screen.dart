@@ -1,4 +1,5 @@
 import 'package:taleem_app/common_imports.dart';
+
 class HomeScreen extends StatefulWidget {
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -23,7 +24,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadSelectedDurations() async {
     for (var session in sessions) {
-      int? storedDuration = await storeService.loadSessionDuration(session.name);
+      int? storedDuration =
+          await storeService.loadSessionDuration(session.name);
       if (storedDuration != null) {
         setState(() {
           session.selectedDuration = storedDuration;
@@ -32,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Opens a bottom sheet with a CupertinoTimerPicker.
   void _showTimePicker(Session session) {
     Duration initialDuration =
         Duration(minutes: session.selectedDuration ?? session.defaultDuration);
@@ -59,7 +62,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   setState(() {
                     session.selectedDuration = tempDuration.inMinutes;
                   });
-                  storeService.saveSessionDuration(session.name, session.selectedDuration!);
+                  storeService.saveSessionDuration(
+                      session.name, session.selectedDuration!);
                   Navigator.pop(context);
                 },
               ),
@@ -70,33 +74,38 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Build each grid item for the session.
   Widget _buildGridItem(Session session) {
-    return GestureDetector(
-      onTap: () => _showTimePicker(session),
-      child: Card(
-        elevation: 4,
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: Container(
-            padding: EdgeInsets.all(8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  session.name,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  session.selectedDuration != null
-                      ? '${session.selectedDuration} min'
-                      : 'Not Selected',
-                  textAlign: TextAlign.center,
-                ),
-              ],
+    return Card(
+      elevation: 4,
+      child: Container(
+        padding: EdgeInsets.all(8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              session.name,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
-          ),
+            SizedBox(height: 8),
+            // deafult time with small dropdown to change the time.
+            DropdownButton<int>(
+              value: session.selectedDuration ?? session.defaultDuration,
+              items: [5, 10, 15, 20, 25, 30].map((int value) {
+                return DropdownMenuItem<int>(
+                  value: value,
+                  child: Text('$value min'),
+                );
+              }).toList(),
+              onChanged: (int? newValue) {
+                setState(() {
+                  session.selectedDuration = newValue;
+                });
+                storeService.saveSessionDuration(
+                    session.name, session.selectedDuration!);
+              },
+            )
+          ],
         ),
       ),
     );
@@ -118,7 +127,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisCount: 3,
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
-                children: sessions.map((session) => _buildGridItem(session)).toList(),
+                children: sessions
+                    .map((session) => GestureDetector(
+                          onTap: () => _showTimePicker(session),
+                          child: _buildGridItem(session),
+                        ))
+                    .toList(),
               ),
             ),
           ),
@@ -127,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.only(bottom: 16.0),
             child: SessionCircleContainer(
               onTap: () {
-                // Navigate to your SessionScreen, passing the sessions list.
+                // Navigate to the SessionScreen, passing the sessions list.
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -138,9 +152,11 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.play_circle_outline, size: 50, color: Colors.green),
+                  Icon(Icons.play_circle_outline,
+                      size: 50, color: Colors.green),
                   SizedBox(height: 8),
-                  Text("Start", style: TextStyle(fontSize: 20, color: Colors.white)),
+                  Text("Start",
+                      style: TextStyle(fontSize: 20, color: Colors.white)),
                 ],
               ),
             ),
