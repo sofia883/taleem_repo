@@ -1,4 +1,5 @@
-import 'package:taleem_app/common_imports.dart';
+import 'package:flutter/material.dart';
+
 class SessionCircleContainer extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
