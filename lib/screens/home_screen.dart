@@ -61,7 +61,6 @@ class _HomeScreenState extends State<HomeScreen> {
         (index == _currentSessionIndex) &&
         (_sessionStatus == SessionStatus.running ||
             _sessionStatus == SessionStatus.paused);
-    // Calculate current duration in minutes.
     int currentMinutes = session.selectedDuration ?? session.defaultDuration;
 
     return Card(
@@ -81,18 +80,22 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 8),
-            // Display the formatted duration.
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  formatDuration(currentMinutes),
-                  style: TextStyle(fontSize: 14),
-                ),
-                SizedBox(width: 4),
-                Icon(Icons.arrow_drop_down, size: 16),
-              ],
-            )
+            GestureDetector(
+              onTap: () {
+                _showDurationSelector(context, session);
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    formatDuration(currentMinutes),
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.arrow_drop_down, size: 16),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -133,13 +136,34 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _startSession() {
+  void _showDurationSelector(BuildContext context, Session session) async {
+    TimeOfDay? selectedTime = await showCustomTimePicker(
+      context: context,
+      sessionName: session.name,
+      initialTime: TimeOfDay(
+          hour: session.selectedDuration! ~/ 60,
+          minute: session.selectedDuration! % 60),
+      accentColor: Colors.blue, // You can change this color
+    );
+
+    if (selectedTime != null) {
+      int totalMinutes = selectedTime.hour * 60 + selectedTime.minute;
+      setState(() {
+        session.selectedDuration = totalMinutes;
+        storeService.saveSessionDuration(session.name, totalMinutes);
+      });
+    }
+  }
+
+  void _startSession() async {
     int duration = sessions[_currentSessionIndex].selectedDuration ??
         sessions[_currentSessionIndex].defaultDuration;
     _remainingSeconds = duration * 60;
+
     setState(() {
       _sessionStatus = SessionStatus.running;
     });
+
     _sessionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (_remainingSeconds > 0) {
         setState(() {
@@ -147,16 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       } else {
         timer.cancel();
-        if (_currentSessionIndex < sessions.length - 1) {
-          setState(() {
-            _currentSessionIndex++;
-          });
-          _startSession();
-        } else {
-          setState(() {
-            _sessionStatus = SessionStatus.ended;
-          });
-        }
+        _playCompletionSound(); // Play sound before next session starts
       }
     });
   }
@@ -217,6 +232,28 @@ class _HomeScreenState extends State<HomeScreen> {
         _sessionStatus = SessionStatus.ended;
         _isSessionActive = false;
         _currentSessionIndex = 0;
+      });
+    }
+  }
+
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  void _playCompletionSound() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String selectedSound = prefs.getString('selected_sound') ?? 'mp_01.mp3';
+
+    await _audioPlayer
+        .play(AssetSource('sounds/$selectedSound')); // Play the sound
+    await Future.delayed(
+        Duration(seconds: 2)); // Wait for the sound to complete
+
+    if (_currentSessionIndex < sessions.length - 1) {
+      setState(() {
+        _currentSessionIndex++;
+      });
+      _startSession();
+    } else {
+      setState(() {
+        _sessionStatus = SessionStatus.ended;
       });
     }
   }
@@ -331,6 +368,17 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text("Talim Time Selector"),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => SettingsScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: _isSessionActive ? buildSessionView() : buildHomeView(),
