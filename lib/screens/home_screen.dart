@@ -19,6 +19,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isSessionActive = false;
 
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  int _soundDuration = 2; // Default to 2 seconds
   // Timer variables
   SessionStatus _sessionStatus = SessionStatus.notStarted;
   int _currentSessionIndex = 0;
@@ -42,6 +44,105 @@ class _HomeScreenState extends State<HomeScreen> {
           session.selectedDuration = storedDuration;
         });
       }
+    }
+  }
+
+  Future<void> _loadSoundDuration() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _soundDuration = prefs.getInt('sound_duration') ?? 2;
+    });
+  }
+
+  void _startCountdown() {
+    setState(() {
+      _sessionStatus = SessionStatus.countdown;
+      _countdown = 3;
+    });
+    _countdownTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if (_countdown > 1) {
+        setState(() {
+          _countdown--;
+        });
+      } else {
+        timer.cancel();
+        _startSession();
+      }
+    });
+  }
+
+  void _startSession() async {
+    int duration = sessions[_currentSessionIndex].selectedDuration ??
+        sessions[_currentSessionIndex].defaultDuration;
+    _remainingSeconds = duration * 60;
+
+    setState(() {
+      _sessionStatus = SessionStatus.running;
+    });
+
+    _sessionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if (_remainingSeconds > 0) {
+        setState(() {
+          _remainingSeconds--;
+        });
+      } else {
+        timer.cancel();
+        _playCompletionSound();
+      }
+    });
+  }
+
+  void _pauseSession() {
+    if (_sessionStatus == SessionStatus.running) {
+      _sessionTimer?.cancel();
+      setState(() {
+        _sessionStatus = SessionStatus.paused;
+      });
+    } else if (_sessionStatus == SessionStatus.paused) {
+      setState(() {
+        _sessionStatus = SessionStatus.running;
+      });
+      _sessionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+        if (_remainingSeconds > 0) {
+          setState(() {
+            _remainingSeconds--;
+          });
+        } else {
+          timer.cancel();
+          _playCompletionSound();
+        }
+      });
+    }
+  }
+
+  void _stopSession() async {
+    _sessionTimer?.cancel();
+    _audioPlayer.stop(); // Ensure the sound stops immediately
+    setState(() {
+      _sessionStatus = SessionStatus.ended;
+      _isSessionActive = false;
+      _currentSessionIndex = 0;
+    });
+  }
+
+  void _playCompletionSound() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String selectedSound = prefs.getString('selected_sound') ?? 'mp_01.mp3';
+
+    await _audioPlayer.play(AssetSource('sounds/$selectedSound'));
+    await Future.delayed(
+        Duration(seconds: _soundDuration)); // Play for user-selected duration
+    _audioPlayer.stop(); // Stop sound after duration
+
+    if (_currentSessionIndex < sessions.length - 1) {
+      setState(() {
+        _currentSessionIndex++;
+      });
+      _startCountdown();
+    } else {
+      setState(() {
+        _sessionStatus = SessionStatus.ended;
+      });
     }
   }
 
@@ -72,19 +173,19 @@ class _HomeScreenState extends State<HomeScreen> {
           color: isActive ? Colors.green[300] : Colors.white,
         ),
         padding: EdgeInsets.all(8),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              session.name,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            GestureDetector(
-              onTap: () {
-                _showDurationSelector(context, session);
-              },
-              child: Row(
+        child: GestureDetector(
+          onTap: () {
+            _showDurationSelector(context, session);
+          },
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                session.name,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
@@ -95,8 +196,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Icon(Icons.arrow_drop_down, size: 16),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -119,23 +220,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _startCountdown() {
-    setState(() {
-      _sessionStatus = SessionStatus.countdown;
-      _countdown = 3;
-    });
-    _countdownTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (_countdown > 1) {
-        setState(() {
-          _countdown--;
-        });
-      } else {
-        timer.cancel();
-        _startSession();
-      }
-    });
-  }
-
   void _showDurationSelector(BuildContext context, Session session) async {
     TimeOfDay? selectedTime = await showCustomTimePicker(
       context: context,
@@ -151,109 +235,6 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         session.selectedDuration = totalMinutes;
         storeService.saveSessionDuration(session.name, totalMinutes);
-      });
-    }
-  }
-
-  void _startSession() async {
-    int duration = sessions[_currentSessionIndex].selectedDuration ??
-        sessions[_currentSessionIndex].defaultDuration;
-    _remainingSeconds = duration * 60;
-
-    setState(() {
-      _sessionStatus = SessionStatus.running;
-    });
-
-    _sessionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (_remainingSeconds > 0) {
-        setState(() {
-          _remainingSeconds--;
-        });
-      } else {
-        timer.cancel();
-        _playCompletionSound(); // Play sound before next session starts
-      }
-    });
-  }
-
-  void _pauseSession() {
-    if (_sessionStatus == SessionStatus.running) {
-      _sessionTimer?.cancel();
-      setState(() {
-        _sessionStatus = SessionStatus.paused;
-      });
-    } else if (_sessionStatus == SessionStatus.paused) {
-      setState(() {
-        _sessionStatus = SessionStatus.running;
-      });
-      _sessionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-        if (_remainingSeconds > 0) {
-          setState(() {
-            _remainingSeconds--;
-          });
-        } else {
-          timer.cancel();
-          if (_currentSessionIndex < sessions.length - 1) {
-            setState(() {
-              _currentSessionIndex++;
-            });
-            _startSession();
-          } else {
-            setState(() {
-              _sessionStatus = SessionStatus.ended;
-            });
-          }
-        }
-      });
-    }
-  }
-
-  void _stopSession() async {
-    bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text("Confirm Stop"),
-          content: Text("Are you sure you want to end this session?"),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text("Cancel")),
-            TextButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text("End Session")),
-          ],
-        );
-      },
-    );
-    if (confirmed == true) {
-      _sessionTimer?.cancel();
-      setState(() {
-        _sessionStatus = SessionStatus.ended;
-        _isSessionActive = false;
-        _currentSessionIndex = 0;
-      });
-    }
-  }
-
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  void _playCompletionSound() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String selectedSound = prefs.getString('selected_sound') ?? 'mp_01.mp3';
-
-    await _audioPlayer
-        .play(AssetSource('sounds/$selectedSound')); // Play the sound
-    await Future.delayed(
-        Duration(seconds: 2)); // Wait for the sound to complete
-
-    if (_currentSessionIndex < sessions.length - 1) {
-      setState(() {
-        _currentSessionIndex++;
-      });
-      _startSession();
-    } else {
-      setState(() {
-        _sessionStatus = SessionStatus.ended;
       });
     }
   }
