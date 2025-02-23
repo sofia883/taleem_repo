@@ -60,7 +60,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadSelectedDurations() async {
     for (var session in sessions) {
-      int? storedDuration = await storeService.loadSessionDuration(session.name);
+      int? storedDuration =
+          await storeService.loadSessionDuration(session.name);
       if (storedDuration != null) {
         setState(() {
           session.selectedDuration = storedDuration;
@@ -176,37 +177,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _playCompletionSound() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    String selectedSound = prefs.getString('selected_sound') ?? 'mp_01.mp3';
-    int userSetDurationSeconds = prefs.getInt('sound_duration') ?? 2;
-    int originalSoundDurationSeconds = 3;
+    String selectedSound =
+        prefs.getString('selected_sound') ?? 'soft_beep_01.wav';
+    int soundDuration = prefs.getInt('sound_duration') ?? 2;
 
-    setState(() {
-      _isBlinking = true;
-      _showBlink = true;
-    });
-    _blinkingTimer = Timer.periodic(Duration(milliseconds: 500), (timer) {
-      setState(() {
-        _showBlink = !_showBlink;
-      });
-    });
+    // Example using audio_players:
+    await _audioPlayer.play(AssetSource('sounds/$selectedSound'));
 
-    if (userSetDurationSeconds < originalSoundDurationSeconds) {
-      await _audioPlayer.play(AssetSource('sounds/$selectedSound'));
-      await Future.delayed(Duration(seconds: originalSoundDurationSeconds));
-    } else {
-      DateTime startTime = DateTime.now();
-      while (true) {
-        DateTime now = DateTime.now();
-        Duration elapsed = now.difference(startTime);
-        if (elapsed.inSeconds + originalSoundDurationSeconds > userSetDurationSeconds) {
-          break;
-        }
-        await _audioPlayer.play(AssetSource('sounds/$selectedSound'));
-        await Future.delayed(Duration(seconds: originalSoundDurationSeconds));
-      }
-    }
-
+    // Play only for 'soundDuration' seconds:
+    await Future.delayed(Duration(seconds: soundDuration));
     _audioPlayer.stop();
+
+    // Then continue to next session or end
     _blinkingTimer?.cancel();
     setState(() {
       _isBlinking = false;
@@ -339,7 +321,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       case SessionStatus.countdown:
         return Text("$_countdown",
             style: TextStyle(
-                fontSize: 50, fontWeight: FontWeight.bold, color: Colors.white));
+                fontSize: 50,
+                fontWeight: FontWeight.bold,
+                color: Colors.white));
       case SessionStatus.running:
       case SessionStatus.paused:
         return Column(
@@ -354,14 +338,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             SizedBox(height: 8),
             Text(
-              _isBlinking ? (_showBlink ? "00:00" : "") : formatDuration(_remainingSeconds),
+              _isBlinking
+                  ? (_showBlink ? "00:00" : "")
+                  : formatDuration(_remainingSeconds),
               style: TextStyle(fontSize: 36, color: Colors.white),
             ),
           ],
         );
       case SessionStatus.ended:
         return Text("Session Ended",
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white));
+            style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.white));
       default:
         return Container();
     }
@@ -388,7 +377,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               Icon(Icons.play_arrow, size: 50, color: Colors.white),
               SizedBox(height: 8),
-              Text("Start Session", style: TextStyle(fontSize: 20, color: Colors.white)),
+              Text("Start Session",
+                  style: TextStyle(fontSize: 20, color: Colors.white)),
             ],
           ),
         ),
@@ -402,7 +392,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _buildSessionGrid(),
         Divider(thickness: 3),
         SizedBox(height: 200),
-        if (_sessionStatus == SessionStatus.running || _sessionStatus == SessionStatus.paused)
+        if (_sessionStatus == SessionStatus.running ||
+            _sessionStatus == SessionStatus.paused)
           SessionControlButtons(
             onStop: _stopSession,
             onPauseResume: _pauseSession,
@@ -444,20 +435,3 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
