@@ -1,4 +1,8 @@
-import 'package:taleem_app/common_imports.dart';
+import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:taleem_app/common_imports.dart'; // Assuming this includes necessary imports.
 
 enum SessionStatus { notStarted, countdown, running, paused, ended }
 
@@ -7,7 +11,7 @@ class HomeScreen extends StatefulWidget {
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<Session> sessions = [
     Session(name: 'Halqa', defaultDuration: 10),
     Session(name: 'Taleem', defaultDuration: 20),
@@ -17,19 +21,17 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   final AudioPlayer _audioPlayer = AudioPlayer();
-
   final StoreService storeService = StoreService();
-  bool _isBlinking =
-      false; // Add this linebool _isBlinking = false;  // Controls whether blinking is active.
-  bool _showBlink = false; // Toggles the text visibility during blinking.
-  Timer? _blinkingTimer; // Reference to the blinking timer.
+
+  bool _isBlinking = false;
+  bool _showBlink = false;
+  Timer? _blinkingTimer;
 
   bool _isSessionActive = false;
   Timer? _blinkTimer;
   AudioPlayer? _currentPlayer;
-  int _soundDuration =
-      2; // Default to 2 seconds, but will be updated from SharedPreferences
-  // Timer variables
+  int _soundDuration = 2;
+
   SessionStatus _sessionStatus = SessionStatus.notStarted;
   int _currentSessionIndex = 0;
   int _remainingSeconds = 0;
@@ -37,23 +39,28 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _countdownTimer;
   int _countdown = 3;
 
+  // New variable: a target end time for the running session.
+  DateTime? _targetTime;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadSelectedDurations();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _blinkTimer?.cancel();
-    _currentPlayer?.dispose();
+    _sessionTimer?.cancel();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
   Future<void> _loadSelectedDurations() async {
     for (var session in sessions) {
-      int? storedDuration =
-          await storeService.loadSessionDuration(session.name);
+      int? storedDuration = await storeService.loadSessionDuration(session.name);
       if (storedDuration != null) {
         setState(() {
           session.selectedDuration = storedDuration;
@@ -79,27 +86,37 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // Modified _startSession: sets a target end time and uses it to update the remaining seconds.
   void _startSession() async {
     int duration = sessions[_currentSessionIndex].selectedDuration ??
         sessions[_currentSessionIndex].defaultDuration;
+    // Calculate total seconds.
     _remainingSeconds = duration * 60;
+
+    // Set the target end time.
+    _targetTime = DateTime.now().add(Duration(minutes: duration));
 
     setState(() {
       _sessionStatus = SessionStatus.running;
     });
 
     _sessionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (_remainingSeconds > 0) {
+      int secondsLeft = _targetTime!.difference(DateTime.now()).inSeconds;
+      if (secondsLeft > 0) {
         setState(() {
-          _remainingSeconds--;
+          _remainingSeconds = secondsLeft;
         });
       } else {
         timer.cancel();
+        setState(() {
+          _remainingSeconds = 0;
+        });
         _playCompletionSound();
       }
     });
   }
 
+  // Modified pause/resume logic: if resuming, reset target time using the remaining seconds.
   void _pauseSession() {
     if (_sessionStatus == SessionStatus.running) {
       _sessionTimer?.cancel();
@@ -110,28 +127,45 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _sessionStatus = SessionStatus.running;
       });
+      // Reset target time based on current remaining seconds.
+      _targetTime = DateTime.now().add(Duration(seconds: _remainingSeconds));
       _sessionTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-        if (_remainingSeconds > 0) {
+        int secondsLeft = _targetTime!.difference(DateTime.now()).inSeconds;
+        if (secondsLeft > 0) {
           setState(() {
-            _remainingSeconds--;
+            _remainingSeconds = secondsLeft;
           });
         } else {
           timer.cancel();
+          setState(() {
+            _remainingSeconds = 0;
+          });
           _playCompletionSound();
         }
       });
     }
   }
 
+  // App lifecycle handling: update the remaining time when the app resumes.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _targetTime != null &&
+        _sessionStatus == SessionStatus.running) {
+      int secondsLeft = _targetTime!.difference(DateTime.now()).inSeconds;
+      setState(() {
+        _remainingSeconds = secondsLeft;
+      });
+    }
+  }
+
   void _startBlinking(int durationSeconds) {
-    // Start blinking when timer reaches 00:00
     _blinkTimer = Timer.periodic(Duration(milliseconds: 500), (timer) {
       setState(() {
         _isBlinking = !_isBlinking;
       });
     });
 
-    // Stop blinking after the sound duration
     Future.delayed(Duration(seconds: durationSeconds), () {
       _blinkTimer?.cancel();
       setState(() {
@@ -143,14 +177,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _playCompletionSound() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String selectedSound = prefs.getString('selected_sound') ?? 'mp_01.mp3';
-
-    // Get the duration (in seconds) the user set for the sound.
     int userSetDurationSeconds = prefs.getInt('sound_duration') ?? 2;
-
-    // Assume your sound (e.g., a beep sequence) lasts this many seconds.
     int originalSoundDurationSeconds = 3;
 
-    // Start the blinking effect:
     setState(() {
       _isBlinking = true;
       _showBlink = true;
@@ -161,20 +190,15 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     });
 
-    // Play the sound as follows:
     if (userSetDurationSeconds < originalSoundDurationSeconds) {
-      // If the user-set time is less than a full sound, play it once fully.
       await _audioPlayer.play(AssetSource('sounds/$selectedSound'));
       await Future.delayed(Duration(seconds: originalSoundDurationSeconds));
     } else {
-      // Otherwise, loop the sound so that we play as many full beeps as possible.
       DateTime startTime = DateTime.now();
       while (true) {
         DateTime now = DateTime.now();
         Duration elapsed = now.difference(startTime);
-        // Check: if another full beep would exceed the user-set duration, then stop.
-        if (elapsed.inSeconds + originalSoundDurationSeconds >
-            userSetDurationSeconds) {
+        if (elapsed.inSeconds + originalSoundDurationSeconds > userSetDurationSeconds) {
           break;
         }
         await _audioPlayer.play(AssetSource('sounds/$selectedSound'));
@@ -182,7 +206,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    // Stop the sound (if still playing) and cancel blinking:
     _audioPlayer.stop();
     _blinkingTimer?.cancel();
     setState(() {
@@ -190,7 +213,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _showBlink = false;
     });
 
-    // Proceed to next session or finish:
     if (_currentSessionIndex < sessions.length - 1) {
       setState(() {
         _currentSessionIndex++;
@@ -222,6 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
         (index == _currentSessionIndex) &&
         (_sessionStatus == SessionStatus.running ||
             _sessionStatus == SessionStatus.paused);
+    // When displaying duration on grid, assume it's in minutes.
     int currentMinutes = session.selectedDuration ?? session.defaultDuration;
 
     return Card(
@@ -281,15 +304,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showDurationSelector(BuildContext context, Session session) async {
-    int totalMinutes = session.selectedDuration ??
-        session.defaultDuration; // Use default if null
-
+    int totalMinutes = session.selectedDuration ?? session.defaultDuration;
     TimeOfDay? selectedTime = await showCustomTimePicker(
       context: context,
       sessionName: session.name,
       initialTime: TimeOfDay(
-        hour: totalMinutes ~/ 60, // Safe fallback
-        minute: totalMinutes % 60, // Safe fallback
+        hour: totalMinutes ~/ 60,
+        minute: totalMinutes % 60,
       ),
       accentColor: Colors.blue,
     );
@@ -303,6 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Assumes that formatDuration receives seconds. Adjust if necessary.
   String formatDuration(int seconds) {
     int minutes = seconds ~/ 60;
     int secs = seconds % 60;
@@ -317,9 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case SessionStatus.countdown:
         return Text("$_countdown",
             style: TextStyle(
-                fontSize: 50,
-                fontWeight: FontWeight.bold,
-                color: Colors.white));
+                fontSize: 50, fontWeight: FontWeight.bold, color: Colors.white));
       case SessionStatus.running:
       case SessionStatus.paused:
         return Column(
@@ -333,27 +353,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: Colors.white),
             ),
             SizedBox(height: 8),
-            // When blinking is active, alternate between showing "00:00" and an empty string.
             Text(
-              _isBlinking
-                  ? (_showBlink ? "00:00" : "")
-                  : formatDuration(_remainingSeconds),
+              _isBlinking ? (_showBlink ? "00:00" : "") : formatDuration(_remainingSeconds),
               style: TextStyle(fontSize: 36, color: Colors.white),
             ),
           ],
         );
       case SessionStatus.ended:
         return Text("Session Ended",
-            style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white));
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white));
       default:
         return Container();
     }
   }
 
-  // Home view shows the grid and start button.
   Widget buildHomeView() {
     return Column(
       children: [
@@ -375,8 +388,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(Icons.play_arrow, size: 50, color: Colors.white),
               SizedBox(height: 8),
-              Text("Start Session",
-                  style: TextStyle(fontSize: 20, color: Colors.white)),
+              Text("Start Session", style: TextStyle(fontSize: 20, color: Colors.white)),
             ],
           ),
         ),
@@ -384,17 +396,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Session view shows the active timer and control buttons.
   Widget buildSessionView() {
     return Column(
       children: [
         _buildSessionGrid(),
-        Divider(
-          thickness: 3,
-        ),
+        Divider(thickness: 3),
         SizedBox(height: 200),
-        if (_sessionStatus == SessionStatus.running ||
-            _sessionStatus == SessionStatus.paused)
+        if (_sessionStatus == SessionStatus.running || _sessionStatus == SessionStatus.paused)
           SessionControlButtons(
             onStop: _stopSession,
             onPauseResume: _pauseSession,
@@ -436,3 +444,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
