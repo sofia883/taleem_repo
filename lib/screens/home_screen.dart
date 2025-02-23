@@ -20,7 +20,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isSessionActive = false;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
-  int _soundDuration = 2; // Default to 2 seconds
+  int _soundDuration =
+      2; // Default to 2 seconds, but will be updated from SharedPreferences
   // Timer variables
   SessionStatus _sessionStatus = SessionStatus.notStarted;
   int _currentSessionIndex = 0;
@@ -45,13 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     }
-  }
-
-  Future<void> _loadSoundDuration() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _soundDuration = prefs.getInt('sound_duration') ?? 2;
-    });
   }
 
   void _startCountdown() {
@@ -128,10 +122,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void _playCompletionSound() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String selectedSound = prefs.getString('selected_sound') ?? 'mp_01.mp3';
+    _soundDuration =
+        prefs.getInt('sound_duration') ?? 2; // Load updated duration
 
     await _audioPlayer.play(AssetSource('sounds/$selectedSound'));
     await Future.delayed(
-        Duration(seconds: _soundDuration)); // Play for user-selected duration
+        Duration(seconds: _soundDuration)); // Use updated duration
     _audioPlayer.stop(); // Stop sound after duration
 
     if (_currentSessionIndex < sessions.length - 1) {
@@ -221,20 +217,24 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showDurationSelector(BuildContext context, Session session) async {
+    int totalMinutes = session.selectedDuration ??
+        session.defaultDuration; // Use default if null
+
     TimeOfDay? selectedTime = await showCustomTimePicker(
       context: context,
       sessionName: session.name,
       initialTime: TimeOfDay(
-          hour: session.selectedDuration! ~/ 60,
-          minute: session.selectedDuration! % 60),
-      accentColor: Colors.blue, // You can change this color
+        hour: totalMinutes ~/ 60, // Safe fallback
+        minute: totalMinutes % 60, // Safe fallback
+      ),
+      accentColor: Colors.blue,
     );
 
     if (selectedTime != null) {
-      int totalMinutes = selectedTime.hour * 60 + selectedTime.minute;
+      int newTotalMinutes = selectedTime.hour * 60 + selectedTime.minute;
       setState(() {
-        session.selectedDuration = totalMinutes;
-        storeService.saveSessionDuration(session.name, totalMinutes);
+        session.selectedDuration = newTotalMinutes;
+        storeService.saveSessionDuration(session.name, newTotalMinutes);
       });
     }
   }
