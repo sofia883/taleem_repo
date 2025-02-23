@@ -1,10 +1,11 @@
 import 'package:taleem_app/common_imports.dart';
+
 class CustomTimePicker extends StatefulWidget {
   final String sessionName;
   final TimeOfDay initialTime;
   final Color accentColor;
   final Function(TimeOfDay) onTimeSelected;
-  
+
   const CustomTimePicker({
     Key? key,
     required this.sessionName,
@@ -55,10 +56,7 @@ class _CustomTimePickerState extends State<CustomTimePicker> {
               children: [
                 Text(
                   widget.sessionName,
-                  style: TextStyle(
-                    fontSize: 20, 
-                    fontWeight: FontWeight.bold
-                  ),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 4),
                 Text(

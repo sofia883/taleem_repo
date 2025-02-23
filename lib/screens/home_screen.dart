@@ -15,11 +15,18 @@ class _HomeScreenState extends State<HomeScreen> {
     Session(name: 'Mashwarah', defaultDuration: 5),
     Session(name: 'Tashkeel', defaultDuration: 10),
   ];
-  final StoreService storeService = StoreService();
-
-  bool _isSessionActive = false;
 
   final AudioPlayer _audioPlayer = AudioPlayer();
+
+  final StoreService storeService = StoreService();
+  bool _isBlinking =
+      false; // Add this linebool _isBlinking = false;  // Controls whether blinking is active.
+  bool _showBlink = false; // Toggles the text visibility during blinking.
+  Timer? _blinkingTimer; // Reference to the blinking timer.
+
+  bool _isSessionActive = false;
+  Timer? _blinkTimer;
+  AudioPlayer? _currentPlayer;
   int _soundDuration =
       2; // Default to 2 seconds, but will be updated from SharedPreferences
   // Timer variables
@@ -34,6 +41,13 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadSelectedDurations();
+  }
+
+  @override
+  void dispose() {
+    _blinkTimer?.cancel();
+    _currentPlayer?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSelectedDurations() async {
@@ -109,27 +123,74 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _stopSession() async {
-    _sessionTimer?.cancel();
-    _audioPlayer.stop(); // Ensure the sound stops immediately
-    setState(() {
-      _sessionStatus = SessionStatus.ended;
-      _isSessionActive = false;
-      _currentSessionIndex = 0;
+  void _startBlinking(int durationSeconds) {
+    // Start blinking when timer reaches 00:00
+    _blinkTimer = Timer.periodic(Duration(milliseconds: 500), (timer) {
+      setState(() {
+        _isBlinking = !_isBlinking;
+      });
+    });
+
+    // Stop blinking after the sound duration
+    Future.delayed(Duration(seconds: durationSeconds), () {
+      _blinkTimer?.cancel();
+      setState(() {
+        _isBlinking = false;
+      });
     });
   }
 
   void _playCompletionSound() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String selectedSound = prefs.getString('selected_sound') ?? 'mp_01.mp3';
-    _soundDuration =
-        prefs.getInt('sound_duration') ?? 2; // Load updated duration
 
-    await _audioPlayer.play(AssetSource('sounds/$selectedSound'));
-    await Future.delayed(
-        Duration(seconds: _soundDuration)); // Use updated duration
-    _audioPlayer.stop(); // Stop sound after duration
+    // Get the duration (in seconds) the user set for the sound.
+    int userSetDurationSeconds = prefs.getInt('sound_duration') ?? 2;
 
+    // Assume your sound (e.g., a beep sequence) lasts this many seconds.
+    int originalSoundDurationSeconds = 3;
+
+    // Start the blinking effect:
+    setState(() {
+      _isBlinking = true;
+      _showBlink = true;
+    });
+    _blinkingTimer = Timer.periodic(Duration(milliseconds: 500), (timer) {
+      setState(() {
+        _showBlink = !_showBlink;
+      });
+    });
+
+    // Play the sound as follows:
+    if (userSetDurationSeconds < originalSoundDurationSeconds) {
+      // If the user-set time is less than a full sound, play it once fully.
+      await _audioPlayer.play(AssetSource('sounds/$selectedSound'));
+      await Future.delayed(Duration(seconds: originalSoundDurationSeconds));
+    } else {
+      // Otherwise, loop the sound so that we play as many full beeps as possible.
+      DateTime startTime = DateTime.now();
+      while (true) {
+        DateTime now = DateTime.now();
+        Duration elapsed = now.difference(startTime);
+        // Check: if another full beep would exceed the user-set duration, then stop.
+        if (elapsed.inSeconds + originalSoundDurationSeconds >
+            userSetDurationSeconds) {
+          break;
+        }
+        await _audioPlayer.play(AssetSource('sounds/$selectedSound'));
+        await Future.delayed(Duration(seconds: originalSoundDurationSeconds));
+      }
+    }
+
+    // Stop the sound (if still playing) and cancel blinking:
+    _audioPlayer.stop();
+    _blinkingTimer?.cancel();
+    setState(() {
+      _isBlinking = false;
+      _showBlink = false;
+    });
+
+    // Proceed to next session or finish:
     if (_currentSessionIndex < sessions.length - 1) {
       setState(() {
         _currentSessionIndex++;
@@ -142,15 +203,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Helper to format total minutes into "X hr Y min" (or just "Y min").
-  String formatDuration(int totalMinutes) {
-    int hours = totalMinutes ~/ 60;
-    int minutes = totalMinutes % 60;
-    if (hours > 0) {
-      return "$hours hr ${minutes} min";
-    } else {
-      return "$minutes min";
-    }
+  void _stopSession() async {
+    _sessionTimer?.cancel();
+    _blinkTimer?.cancel();
+    await _currentPlayer?.stop();
+    await _currentPlayer?.dispose();
+
+    setState(() {
+      _sessionStatus = SessionStatus.ended;
+      _isBlinking = false;
+      _isSessionActive = false;
+      _currentSessionIndex = 0;
+    });
   }
 
   Widget _buildGridItem(Session session, int index) {
@@ -239,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _formatTime(int seconds) {
+  String formatDuration(int seconds) {
     int minutes = seconds ~/ 60;
     int secs = seconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
@@ -269,8 +333,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: Colors.white),
             ),
             SizedBox(height: 8),
-            Text(_formatTime(_remainingSeconds),
-                style: TextStyle(fontSize: 36, color: Colors.white)),
+            // When blinking is active, alternate between showing "00:00" and an empty string.
+            Text(
+              _isBlinking
+                  ? (_showBlink ? "00:00" : "")
+                  : formatDuration(_remainingSeconds),
+              style: TextStyle(fontSize: 36, color: Colors.white),
+            ),
           ],
         );
       case SessionStatus.ended:
