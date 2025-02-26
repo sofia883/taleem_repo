@@ -1,7 +1,6 @@
 import 'common_imports.dart';
 
 void main() {
-  initializeNotifications();
   runApp(MyApp());
 }
 
