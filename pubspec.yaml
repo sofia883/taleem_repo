@@ -37,9 +37,11 @@ dependencies:
   audioplayers: ^6.2.0
   shared_preferences: ^2.5.2
   google_fonts: ^6.2.1
-
-dev_dependencies:
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.10.0
+  flutter_background_service: ^5.1.0
   flutter_test:
+
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
@@ -60,10 +62,9 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
   assets:
     - assets/sounds/
-  #   - images/a_dot_ham.jpeg
+  
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -10,27 +10,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _selectedSoundDuration = 2;
 
   // Default to the first file in your list, or any other of your choosing.
-  String _selectedSound = "soft_beep_01.wav";
+  String _selectedSound = "assets/sounds/mp_01.mp3"; // Default sound
 
-  // Here are 15 sample .wav files.
+  Future<void> _loadSelectedSound() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      // Use the full path as default
+      _selectedSound =
+          prefs.getString('selected_sound') ?? "assets/sounds/mp_01.mp3";
+    });
+  }
+
   final List<String> _soundOptions = [
-    "soft_beep_01.wav",
-    "soft_beep_02.wav",
-    "soft_beep_03.wav",
-    "soft_beep_04.wav",
-    "soft_beep_05.wav",
-    "soft_beep_06.wav",
-    "soft_beep_07.wav",
-    "soft_beep_08.wav",
-    "soft_beep_09.wav",
-    "soft_beep_10.wav",
-    "soft_beep_11.wav",
-    "soft_beep_12.wav",
-    "soft_beep_13.wav",
-    "soft_beep_14.wav",
-    "soft_beep_15.wav",
+    "assets/sounds/mp_01.mp3",
+    "assets/sounds/soft_beep_1.wav",
+    "assets/sounds/soft_beep_2.wav",
+    "assets/sounds/soft_beep_3.wav",
+    "assets/sounds/soft_beep_4.wav",
+    "assets/sounds/soft_beep_5.wav",
+    "assets/sounds/soft_beep_6.wav",
+    "assets/sounds/soft_beep_7.wav",
+    "assets/sounds/soft_beep_8.wav",
+    "assets/sounds/soft_beep_9.wav",
+    "assets/sounds/soft_beep_10.wav",
+    "assets/sounds/soft_beep_11.wav",
+    "assets/sounds/soft_beep_12.wav",
+    "assets/sounds/soft_beep_13.wav",
+    "assets/sounds/soft_beep_14.wav",
+    "assets/sounds/soft_beep_15.wav",
   ];
-
   @override
   void initState() {
     super.initState();
@@ -50,14 +58,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveSoundDuration(int duration) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setInt('sound_duration', duration);
-  }
-
-  /// Loads the user’s previously saved sound filename.
-  Future<void> _loadSelectedSound() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _selectedSound = prefs.getString('selected_sound') ?? "soft_beep_01.wav";
-    });
   }
 
   /// Saves the user’s selected sound filename.
@@ -110,8 +110,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             DropdownButton<String>(
               value: _selectedSound,
               items: _soundOptions.map((soundFile) {
-                // Create a friendlier label by removing the extension
-                final label = soundFile.substring(0, soundFile.lastIndexOf('.'));
+                // Extract just the filename without path for display
+                final label = soundFile.split('/').last.replaceAll('.wav', '');
                 return DropdownMenuItem<String>(
                   value: soundFile,
                   child: Text(label),

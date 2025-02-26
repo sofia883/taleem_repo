@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:taleem_app/common_imports.dart'; // Assuming this includes necessary imports.
+import 'package:flutter_background_service/flutter_background_service.dart';
 
 enum SessionStatus { notStarted, countdown, running, paused, ended }
 
@@ -147,48 +148,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  // App lifecycle handling: update the remaining time when the app resumes.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed &&
-        _targetTime != null &&
-        _sessionStatus == SessionStatus.running) {
-      int secondsLeft = _targetTime!.difference(DateTime.now()).inSeconds;
-      setState(() {
-        _remainingSeconds = secondsLeft;
+  void _playCompletionSound() async {
+    try {
+      // Get stored preferences
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String selectedSound =
+          prefs.getString('selected_sound') ?? 'assets/sounds/soft_beep_1.wav';
+      int soundDuration = prefs.getInt('sound_duration') ?? 2;
+
+      // Create a new audio player instance for this playback
+      AudioPlayer player = AudioPlayer();
+
+      // Change release mode to stop so the sound doesn't loop indefinitely
+      await player.setReleaseMode(ReleaseMode.stop);
+
+      // Start playing the sound - remove 'assets/' from the path since AssetSource adds it
+      String soundPath = selectedSound.replaceAll('assets/', '');
+      await player.play(AssetSource(soundPath));
+
+      // Schedule sound stop after duration
+      Timer(Duration(seconds: soundDuration), () async {
+        await player.stop();
+        await player.dispose();
+
+        // Continue with session progression
+        _handleSessionProgression();
       });
+    } catch (e) {
+      print('Error playing completion sound: $e');
+      // Even if sound fails, continue with session
+      _handleSessionProgression();
     }
   }
 
-  void _startBlinking(int durationSeconds) {
-    _blinkTimer = Timer.periodic(Duration(milliseconds: 500), (timer) {
-      setState(() {
-        _isBlinking = !_isBlinking;
-      });
-    });
-
-    Future.delayed(Duration(seconds: durationSeconds), () {
-      _blinkTimer?.cancel();
-      setState(() {
-        _isBlinking = false;
-      });
-    });
-  }
-
-  void _playCompletionSound() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String selectedSound =
-        prefs.getString('selected_sound') ?? 'soft_beep_01.wav';
-    int soundDuration = prefs.getInt('sound_duration') ?? 2;
-
-    // Example using audio_players:
-    await _audioPlayer.play(AssetSource('sounds/$selectedSound'));
-
-    // Play only for 'soundDuration' seconds:
-    await Future.delayed(Duration(seconds: soundDuration));
-    _audioPlayer.stop();
-
-    // Then continue to next session or end
+  void _handleSessionProgression() {
     _blinkingTimer?.cancel();
     setState(() {
       _isBlinking = false;
@@ -204,6 +197,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _sessionStatus = SessionStatus.ended;
       });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed &&
+        _targetTime != null &&
+        _sessionStatus == SessionStatus.running) {
+      // Update remaining time when app resumes
+      int secondsLeft = _targetTime!.difference(DateTime.now()).inSeconds;
+
+      if (secondsLeft <= 0) {
+        // If time expired while in background, play sound immediately
+        _playCompletionSound();
+      } else {
+        setState(() {
+          _remainingSeconds = secondsLeft;
+        });
+      }
     }
   }
 
@@ -406,6 +420,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             }
           },
           child: _buildTimerContent(),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            AudioPlayer testPlayer = AudioPlayer();
+            await testPlayer.setReleaseMode(ReleaseMode.stop);
+            await testPlayer.play(AssetSource('sounds/soft_beep_1.wav'));
+          },
+          child: Text('Test Sound'),
         ),
         SizedBox(height: 20),
       ],
